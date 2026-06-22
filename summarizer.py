@@ -89,8 +89,8 @@ def _summarize_with_llm(messages: list[discord.Message], channel_name: str) -> s
         response = llm(
             prompt,
             max_tokens=512,
-            temperature=0.5,
-            repeat_penalty=1.3,
+            temperature=0.1,
+            repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>"],
         )
         text = response["choices"][0]["text"].strip()
@@ -390,7 +390,7 @@ def _names_to_mentions(body: str, messages: list[discord.Message]) -> str:
 
     # Strip "@" before display names — the LLM sometimes writes @Name as plain text
     for name in seen:
-        body = re.sub(rf"@{re.escape(name)}(?!\w)", name, body)
+        body = re.sub(rf"@{re.escape(name)}(?!\w)", name, body, flags=re.IGNORECASE)
 
     for name in sorted(seen, key=len, reverse=True):
         body = re.sub(
@@ -419,6 +419,14 @@ async def generate_summary(
         body = _build_summary(messages)
     if not body:
         body = f"*{stats['total_messages']} messages échangés, aucun sujet majeur identifié.*"
+
+    # Strip echoed prompt header the LLM sometimes reproduces
+    body = re.sub(
+        r"^Résumé du salon #[^\n]+\s*(aujourd'hui\s*)?:?\s*\n*",
+        "",
+        body,
+        flags=re.MULTILINE,
+    ).strip()
 
     body = _names_to_mentions(body, messages)
 
