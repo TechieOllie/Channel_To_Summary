@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -53,7 +54,7 @@ def _load_llm():
 
 
 _CHATML_TEMPLATE = """<|im_start|>system
-Tu rédiges un résumé fidèle et complet des conversations Discord en français. Couvre les sujets principaux, les décisions, les questions importantes et les annonces. Utilise les mentions <@id> pour désigner les utilisateurs (ex: <@12345> a demandé…). Réponds uniquement avec le résumé, sans préambule.<|im_end|>
+Tu es un assistant qui résume des conversations Discord en français. Rédige un résumé naturel, sans horodatages ni liste chronologique. Dégage les sujets, décisions et annonces importants en phrases complètes. Utilise les mentions <@id> pour désigner les utilisateurs (ex: <@12345> a proposé…). Reste fidèle aux échanges, ne répète pas la même information. Réponds uniquement avec le résumé, sans préambule.<|im_end|>
 <|im_start|>user
 Résumé du salon #{channel_name} aujourd'hui :
 
@@ -88,8 +89,8 @@ def _summarize_with_llm(messages: list[discord.Message], channel_name: str) -> s
         response = llm(
             prompt,
             max_tokens=512,
-            temperature=0.3,
-            repeat_penalty=1.2,
+            temperature=0.5,
+            repeat_penalty=1.3,
             stop=["<|im_end|>", "<|im_start|>"],
         )
         text = response["choices"][0]["text"].strip()
@@ -387,6 +388,10 @@ def _names_to_mentions(body: str, messages: list[discord.Message]) -> str:
         return ph
     body = re.sub(r"<@(\d+)>", _protect, body)
 
+    # Strip "@" before display names — the LLM sometimes writes @Name as plain text
+    for name in seen:
+        body = re.sub(rf"@{re.escape(name)}(?!\w)", name, body)
+
     for name in sorted(seen, key=len, reverse=True):
         body = re.sub(
             rf"(?<!\w){re.escape(name)}(?!\w)",
@@ -409,7 +414,7 @@ async def generate_summary(
 
     stats = _compute_stats(messages)
 
-    body = _summarize_with_llm(messages, channel_name)
+    body = await asyncio.to_thread(_summarize_with_llm, messages, channel_name)
     if not body:
         body = _build_summary(messages)
     if not body:
