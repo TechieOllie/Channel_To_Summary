@@ -36,7 +36,7 @@ def _load_llm():
         from llama_cpp import Llama
         _LLM_INSTANCE = Llama(
             model_path=model_path,
-            n_ctx=4096,
+            n_ctx=8192,
             n_threads=os.cpu_count() or 4,
             verbose=False,
         )
@@ -53,7 +53,7 @@ def _load_llm():
 
 
 _CHATML_TEMPLATE = """<|im_start|>system
-Tu résumes des conversations Discord en français. Sois concis, va à l'essentiel. Réponds uniquement avec le résumé, sans préambule.<|im_end|>
+Tu rédiges un résumé fidèle et complet des conversations Discord en français. Couvre les sujets principaux, les décisions, les questions importantes et les annonces. Utilise les mentions <@id> pour désigner les utilisateurs (ex: <@12345> a demandé…). Réponds uniquement avec le résumé, sans préambule.<|im_end|>
 <|im_start|>user
 Résumé du salon #{channel_name} aujourd'hui :
 
@@ -79,16 +79,16 @@ def _summarize_with_llm(messages: list[discord.Message], channel_name: str) -> s
     if not convo.strip():
         return None
 
-    if len(convo) > 3000:
-        convo = convo[:3000] + "\n…"
+    if len(convo) > 6000:
+        convo = convo[:6000] + "\n…"
 
     prompt = _CHATML_TEMPLATE.format(channel_name=channel_name, messages=convo)
 
     try:
         response = llm(
             prompt,
-            max_tokens=256,
-            temperature=0.2,
+            max_tokens=512,
+            temperature=0.3,
             repeat_penalty=1.2,
             stop=["<|im_end|>", "<|im_start|>"],
         )
@@ -164,12 +164,18 @@ _BUG_SIGNALS = re.compile(
     r"marche\s*pas|ne\s*marche|ne\s*fonctionne)\b",
     re.IGNORECASE,
 )
+_DECISION_SIGNALS = re.compile(
+    r"\b(décid|convenu|validé|approuvé|retenu|choisi|"
+    r"go\s*pour|on\s*fait|on\s*prend|on\s*lance|on\s*garde|"
+    r"on\s*passe|rdv|rendez-vous|meeting|réunion)\b",
+    re.IGNORECASE,
+)
 _ANNOUNCEMENT_SIGNALS = re.compile(
     r"\b(annonce|prévu|prévue|dispo|disponible|prêt|prête|lancé|"
     r"déployé|déployée|sortie|release|livré|publié)\b",
     re.IGNORECASE,
 )
-_TIME_GAP_MINUTES = 25
+_TIME_GAP_MINUTES = 45
 
 
 async def fetch_messages_for_day(
@@ -188,7 +194,8 @@ async def fetch_messages_for_day(
         before=end,
         oldest_first=True,
     ):
-        messages.append(msg)
+        if not msg.author.bot:
+            messages.append(msg)
 
     return messages
 
@@ -201,7 +208,7 @@ class _Cluster(NamedTuple):
     messages: list[discord.Message]
     start: datetime
     end: datetime
-    authors: list[str]
+    authors: list[tuple[str, int]]  # (display_name, user_id)
 
 
 def _cluster_messages(messages: list[discord.Message]) -> list[_Cluster]:
@@ -217,11 +224,11 @@ def _cluster_messages(messages: list[discord.Message]) -> list[_Cluster]:
 
     result = []
     for c in clusters:
-        seen: list[str] = []
+        seen: list[tuple[str, int]] = []
         for m in c:
-            n = m.author.display_name
-            if n not in seen:
-                seen.append(n)
+            pair = (m.author.display_name, m.author.id)
+            if not any(p[0] == pair[0] for p in seen):
+                seen.append(pair)
         result.append(_Cluster(
             messages=c,
             start=c[0].created_at,
@@ -234,35 +241,48 @@ def _cluster_messages(messages: list[discord.Message]) -> list[_Cluster]:
 def _extract_topic(messages: list[discord.Message]) -> str:
     stop = _get_stop_words()
     words: list[str] = []
+    bigrams: list[str] = []
     for m in messages:
-        for w in _WORD_RE.findall(m.clean_content.lower()):
+        tokens = _WORD_RE.findall(m.clean_content.lower())
+        for w in tokens:
             if w not in stop:
                 words.append(w)
+        for i in range(len(tokens) - 1):
+            phrase = f"{tokens[i]} {tokens[i + 1]}"
+            if not any(w in stop for w in (tokens[i], tokens[i + 1])):
+                bigrams.append(phrase)
     if not words:
         return ""
     counter = Counter(words)
-    top = counter.most_common(2)
-    return " ".join(w for w, c in top if c > 1) or top[0][0]
+    bigram_counter = Counter(bigrams)
+    top_bigram = bigram_counter.most_common(1)
+    if top_bigram and top_bigram[0][1] >= 2:
+        return top_bigram[0][0]
+    top = [w for w, c in counter.most_common(3) if c >= 2]
+    if top:
+        return " ".join(top[:2])
+    return counter.most_common(1)[0][0]
 
 
-def _single_person_line(msg: discord.Message, author: str) -> str | None:
+def _single_person_line(msg: discord.Message, author_name: str, author_id: int) -> str | None:
     content = msg.clean_content
     has_link = bool(_URL_RE.search(content))
     has_question = bool(_QUESTION_RE.match(content))
     has_bug = bool(_BUG_SIGNALS.search(content))
     has_announce = bool(_ANNOUNCEMENT_SIGNALS.search(content))
 
+    mention = f"<@{author_id}>"
     if has_bug:
-        return f"**{author}** a signalé un problème : « {_truncate(content, 70)} »"
+        return f"**{mention}** a signalé un problème : « {_truncate(content, 70)} »"
     if has_announce:
-        return f"**{author}** a annoncé : « {_truncate(content, 80)} »"
+        return f"**{mention}** a annoncé : « {_truncate(content, 80)} »"
     if has_link:
-        return f"**{author}** a partagé un lien : « {_truncate(content, 70)} »"
+        return f"**{mention}** a partagé un lien : « {_truncate(content, 70)} »"
     if has_question:
-        return f"**{author}** a demandé : « {_truncate(content, 70)} »"
+        return f"**{mention}** a demandé : « {_truncate(content, 70)} »"
     if len(content) <= 100:
-        return f"**{author}** : {content}"
-    return f"**{author}** : {_truncate(content, 80)}"
+        return f"**{mention}** : {content}"
+    return f"**{mention}** : {_truncate(content, 80)}"
 
 
 def _describe_cluster(cluster: _Cluster) -> str | None:
@@ -274,14 +294,17 @@ def _describe_cluster(cluster: _Cluster) -> str | None:
     total_reactions = sum(sum(r.count for r in m.reactions) for m in msgs)
 
     if len(authors) == 1:
-        return _single_person_line(msgs[-1], authors[0])
+        return _single_person_line(msgs[-1], authors[0][0], authors[0][1])
 
     has_link = any(_URL_RE.search(m.clean_content) for m in msgs if m.clean_content)
     has_question = any(_QUESTION_RE.match(m.clean_content) for m in msgs if m.clean_content)
     has_bug = any(_BUG_SIGNALS.search(m.clean_content) for m in msgs if m.clean_content)
+    has_decision = any(_DECISION_SIGNALS.search(m.clean_content) for m in msgs if m.clean_content)
     topic = _extract_topic(msgs)
 
     labels: list[str] = []
+    if has_decision:
+        labels.append("décision")
     if has_bug:
         labels.append("bug")
     if has_question:
@@ -308,10 +331,11 @@ def _truncate(text: str, max_len: int) -> str:
     return text[: max_len - 1].rstrip() + "…"
 
 
-def _join_names(names: list[str]) -> str:
-    if len(names) <= 2:
-        return " et ".join(names)
-    return ", ".join(names[:-1]) + " et " + names[-1]
+def _join_names(authors: list[tuple[str, int]]) -> str:
+    mentions = [f"<@{uid}>" for _, uid in authors]
+    if len(mentions) <= 2:
+        return " et ".join(mentions)
+    return ", ".join(mentions[:-1]) + " et " + mentions[-1]
 
 
 def _build_summary(messages: list[discord.Message]) -> str | None:
@@ -354,8 +378,24 @@ def _names_to_mentions(body: str, messages: list[discord.Message]) -> str:
         n = m.author.display_name
         if n not in seen:
             seen[n] = m.author.id
+
+    # Protect existing <@id> mentions from corruption during regex pass
+    placeholders: dict[str, str] = {}
+    def _protect(m: re.Match) -> str:
+        ph = f"__UID_{m.group(1)}__"
+        placeholders[ph] = m.group(0)
+        return ph
+    body = re.sub(r"<@(\d+)>", _protect, body)
+
     for name in sorted(seen, key=len, reverse=True):
-        body = re.sub(rf"\b{re.escape(name)}\b", f"<@{seen[name]}>", body)
+        body = re.sub(
+            rf"(?<!\w){re.escape(name)}(?!\w)",
+            f"<@{seen[name]}>",
+            body,
+        )
+
+    for ph, orig in placeholders.items():
+        body = body.replace(ph, orig)
     return body
 
 

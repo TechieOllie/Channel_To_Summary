@@ -27,6 +27,8 @@ def _admin_only():
 
 
 def _summary_embed(title: str, summary: str, msg_count: int, color: discord.Color) -> discord.Embed:
+    if len(summary) > 4096:
+        summary = summary[:4093] + "…"
     embed = discord.Embed(
         title=title,
         description=summary,
