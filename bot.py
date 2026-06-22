@@ -252,15 +252,21 @@ class SummaryBot(discord.Client):
     async def _daily_scheduler(self):
         await self.wait_until_ready()
         while not self.is_closed():
-            now = datetime.now(timezone.utc)
+            now_local = datetime.now(config.SUMMARY_TZ)
             target_h, target_m = map(int, config.SUMMARY_TIME.split(":"))
-            target = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+            target_local = now_local.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
 
-            if target <= now:
-                target += timedelta(days=1)
+            if target_local <= now_local:
+                target_local += timedelta(days=1)
 
-            delay = (target - now).total_seconds()
-            logger.info("Prochain résumé à %s (dans %.0f s)", target.isoformat(), delay)
+            target_utc = target_local.astimezone(timezone.utc)
+            delay = (target_utc - datetime.now(timezone.utc)).total_seconds()
+            logger.info(
+                "Prochain résumé à %s (%s, dans %.0f s)",
+                target_local.isoformat(),
+                config.SUMMARY_TIMEZONE,
+                delay,
+            )
             await asyncio.sleep(delay)
 
             if self.is_closed():
@@ -272,7 +278,7 @@ class SummaryBot(discord.Client):
                 logger.exception("Erreur lors des résumés quotidiens")
 
     async def _run_all_summaries(self):
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(config.SUMMARY_TZ).strftime("%Y-%m-%d")
         logger.info("Génération des résumés pour %s", today)
 
         for guild in self.guilds:
