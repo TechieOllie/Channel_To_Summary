@@ -1,3 +1,5 @@
+.venv/
+.direnv/
 .git/
 .github/
 .env

@@ -1,0 +1,12 @@
+{
+  // The venv the dev shell's `uv sync` keeps current.
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  // Resolved through the direnv PATH: the dev shell's ruff, not a bundled one.
+  "ruff.importStrategy": "fromEnvironment",
+  "ruff.path": ["ruff"],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  }
+}

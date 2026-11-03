@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -20,7 +19,7 @@ def download():
         print(f"Model already exists: {MODEL_FILE} ({size_mb:.0f} MB)")
         return
 
-    print(f"Downloading Qwen2.5-1.5B Q4_K_M (~1.1 GB)...")
+    print("Downloading Qwen2.5-1.5B Q4_K_M (~1.1 GB)...")
     print(f"URL: {MODEL_URL}")
     print()
 
@@ -42,7 +41,9 @@ def download():
             if total:
                 pct = downloaded / total * 100
                 bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
-                sys.stdout.write(f"\r{bar} {pct:.0f}% ({downloaded // 1024 // 1024} MB)")
+                sys.stdout.write(
+                    f"\r{bar} {pct:.0f}% ({downloaded // 1024 // 1024} MB)"
+                )
                 sys.stdout.flush()
 
     print(f"\n✅ Model saved to {MODEL_FILE}")

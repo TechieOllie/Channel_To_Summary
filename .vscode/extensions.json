@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    // Loads .envrc, so VS Code sees the dev shell's Python, uv and .venv.
+    "mkhl.direnv",
+    "ms-python.python",
+    "ms-python.debugpy",
+    "charliermarsh.ruff"
+  ]
+}

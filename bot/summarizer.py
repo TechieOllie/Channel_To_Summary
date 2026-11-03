@@ -5,12 +5,12 @@ import logging
 import os
 import re
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
 import discord
 
-import config
+from . import config
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,15 @@ def _load_llm():
 
     model_path = config.LLAMA_MODEL_PATH
     if not model_path or not os.path.exists(model_path):
-        logger.warning("LLM model not found at %s — using template summarizer", model_path)
+        logger.warning(
+            "LLM model not found at %s — using template summarizer", model_path
+        )
         _LLM_INSTANCE = False
         return None
 
     try:
         from llama_cpp import Llama
+
         _LLM_INSTANCE = Llama(
             model_path=model_path,
             n_ctx=8192,
@@ -64,7 +67,9 @@ Résumé :<|im_end|>
 <|im_start|>assistant"""
 
 
-def _summarize_with_llm(messages: list[discord.Message], channel_name: str) -> str | None:
+def _summarize_with_llm(
+    messages: list[discord.Message], channel_name: str
+) -> str | None:
     llm = _load_llm()
     if not llm:
         return None
@@ -115,43 +120,264 @@ def _get_stop_words() -> set[str]:
         return _STOP_WORDS
 
     _STOP_WORDS = {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been",
-        "being", "have", "has", "had", "do", "does", "did", "will",
-        "would", "could", "should", "may", "might", "shall", "can",
-        "to", "of", "in", "for", "on", "with", "at", "by", "from",
-        "as", "into", "through", "during", "before", "after", "above",
-        "below", "between", "out", "off", "over", "under", "again",
-        "further", "then", "once", "here", "there", "when", "where",
-        "why", "how", "all", "each", "every", "both", "few", "more",
-        "most", "other", "some", "such", "no", "nor", "not", "only",
-        "own", "same", "so", "than", "too", "very", "just", "because",
-        "and", "but", "or", "if", "while", "that", "this", "these",
-        "those", "it", "its", "i", "me", "my", "we", "our", "you",
-        "your", "he", "him", "his", "she", "her", "they", "them",
-        "their", "what", "which", "who", "whom",
-        "le", "la", "les", "un", "une", "des", "du", "de", "ce",
-        "cet", "cette", "ces", "mon", "ton", "son", "ma", "ta", "sa",
-        "mes", "tes", "ses", "nos", "vos", "leurs", "notre", "votre",
-        "leur", "et", "ou", "mais", "donc", "car", "ni", "que", "qui",
-        "quoi", "dont", "où", "avec", "sans", "pour", "dans", "sur",
-        "sous", "par", "entre", "chez", "vers", "depuis", "pendant",
-        "avant", "après", "contre", "selon", "jusque", "dès",
-        "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
-        "me", "te", "se", "lui", "y", "en", "ça", "celui", "celle",
-        "ceux", "celles", "au", "aux", "ne", "pas", "plus", "peu",
-        "très", "trop", "si", "oui", "non", "rien", "personne",
-        "tout", "tous", "toute", "toutes", "chaque", "quelque",
-        "quelques", "plusieurs", "certain", "certaine", "certains",
-        "certaines", "même", "aussi", "bien", "mal", "comme", "car",
-        "est", "sont", "ai", "a", "ont", "avons", "avez", "suis",
-        "cest", "ca", "cela", "peut", "peux", "peuvent", "veut",
-        "veux", "voulons", "font", "fait", "faire", "ete", "était",
-        "étaient", "être", "avoir", "aller", "va", "vas", "vais",
-        "mon", "ma", "mes", "ton", "ta", "tes", "son", "sa", "ses",
-        "notre", "nos", "votre", "vos", "leur", "leurs",
-        "salut", "bonjour", "bonsoir", "hello", "hey", "coucou",
-        "ok", "okay", "daccord", "super", "cool", "genial", "merci",
-        "stp", "svp", "voila", "voilà", "oui", "non", "peutêtre",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "because",
+        "and",
+        "but",
+        "or",
+        "if",
+        "while",
+        "that",
+        "this",
+        "these",
+        "those",
+        "it",
+        "its",
+        "i",
+        "me",
+        "my",
+        "we",
+        "our",
+        "you",
+        "your",
+        "he",
+        "him",
+        "his",
+        "she",
+        "her",
+        "they",
+        "them",
+        "their",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "le",
+        "la",
+        "les",
+        "un",
+        "une",
+        "des",
+        "du",
+        "de",
+        "ce",
+        "cet",
+        "cette",
+        "ces",
+        "mon",
+        "ton",
+        "son",
+        "ma",
+        "ta",
+        "sa",
+        "mes",
+        "tes",
+        "ses",
+        "nos",
+        "vos",
+        "leurs",
+        "notre",
+        "votre",
+        "leur",
+        "et",
+        "ou",
+        "mais",
+        "donc",
+        "car",
+        "ni",
+        "que",
+        "qui",
+        "quoi",
+        "dont",
+        "où",
+        "avec",
+        "sans",
+        "pour",
+        "dans",
+        "sur",
+        "sous",
+        "par",
+        "entre",
+        "chez",
+        "vers",
+        "depuis",
+        "pendant",
+        "avant",
+        "après",
+        "contre",
+        "selon",
+        "jusque",
+        "dès",
+        "je",
+        "tu",
+        "il",
+        "elle",
+        "nous",
+        "vous",
+        "ils",
+        "elles",
+        "te",
+        "se",
+        "lui",
+        "y",
+        "en",
+        "ça",
+        "celui",
+        "celle",
+        "ceux",
+        "celles",
+        "au",
+        "aux",
+        "ne",
+        "pas",
+        "plus",
+        "peu",
+        "très",
+        "trop",
+        "si",
+        "oui",
+        "non",
+        "rien",
+        "personne",
+        "tout",
+        "tous",
+        "toute",
+        "toutes",
+        "chaque",
+        "quelque",
+        "quelques",
+        "plusieurs",
+        "certain",
+        "certaine",
+        "certains",
+        "certaines",
+        "même",
+        "aussi",
+        "bien",
+        "mal",
+        "comme",
+        "est",
+        "sont",
+        "ai",
+        "ont",
+        "avons",
+        "avez",
+        "suis",
+        "cest",
+        "ca",
+        "cela",
+        "peut",
+        "peux",
+        "peuvent",
+        "veut",
+        "veux",
+        "voulons",
+        "font",
+        "fait",
+        "faire",
+        "ete",
+        "était",
+        "étaient",
+        "être",
+        "avoir",
+        "aller",
+        "va",
+        "vas",
+        "vais",
+        "salut",
+        "bonjour",
+        "bonsoir",
+        "hello",
+        "hey",
+        "coucou",
+        "ok",
+        "okay",
+        "daccord",
+        "super",
+        "cool",
+        "genial",
+        "merci",
+        "stp",
+        "svp",
+        "voila",
+        "voilà",
+        "peutêtre",
     }
     return _STOP_WORDS
 
@@ -183,7 +409,7 @@ async def fetch_messages_for_day(
     channel: discord.TextChannel, date: datetime | None = None
 ) -> list[discord.Message]:
     if date is None:
-        date = datetime.now(timezone.utc)
+        date = datetime.now(UTC)
 
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
@@ -204,6 +430,7 @@ async def fetch_messages_for_day(
 # ---------------------------------------------------------------------------
 #  Template-based fallback
 # ---------------------------------------------------------------------------
+
 
 class _Cluster(NamedTuple):
     messages: list[discord.Message]
@@ -230,12 +457,14 @@ def _cluster_messages(messages: list[discord.Message]) -> list[_Cluster]:
             pair = (m.author.display_name, m.author.id)
             if not any(p[0] == pair[0] for p in seen):
                 seen.append(pair)
-        result.append(_Cluster(
-            messages=c,
-            start=c[0].created_at,
-            end=c[-1].created_at,
-            authors=seen,
-        ))
+        result.append(
+            _Cluster(
+                messages=c,
+                start=c[0].created_at,
+                end=c[-1].created_at,
+                authors=seen,
+            )
+        )
     return result
 
 
@@ -265,7 +494,9 @@ def _extract_topic(messages: list[discord.Message]) -> str:
     return counter.most_common(1)[0][0]
 
 
-def _single_person_line(msg: discord.Message, author_name: str, author_id: int) -> str | None:
+def _single_person_line(
+    msg: discord.Message, author_name: str, author_id: int
+) -> str | None:
     content = msg.clean_content
     has_link = bool(_URL_RE.search(content))
     has_question = bool(_QUESTION_RE.match(content))
@@ -298,9 +529,13 @@ def _describe_cluster(cluster: _Cluster) -> str | None:
         return _single_person_line(msgs[-1], authors[0][0], authors[0][1])
 
     has_link = any(_URL_RE.search(m.clean_content) for m in msgs if m.clean_content)
-    has_question = any(_QUESTION_RE.match(m.clean_content) for m in msgs if m.clean_content)
+    has_question = any(
+        _QUESTION_RE.match(m.clean_content) for m in msgs if m.clean_content
+    )
     has_bug = any(_BUG_SIGNALS.search(m.clean_content) for m in msgs if m.clean_content)
-    has_decision = any(_DECISION_SIGNALS.search(m.clean_content) for m in msgs if m.clean_content)
+    has_decision = any(
+        _DECISION_SIGNALS.search(m.clean_content) for m in msgs if m.clean_content
+    )
     topic = _extract_topic(msgs)
 
     labels: list[str] = []
@@ -349,6 +584,7 @@ def _build_summary(messages: list[discord.Message]) -> str | None:
 #  Stats (used only for the footer)
 # ---------------------------------------------------------------------------
 
+
 def _compute_stats(messages: list[discord.Message]) -> dict:
     participants: set[str] = set()
     hourly: Counter[int] = Counter()
@@ -373,6 +609,7 @@ def _compute_stats(messages: list[discord.Message]) -> dict:
 #  Entry point
 # ---------------------------------------------------------------------------
 
+
 def _names_to_mentions(body: str, messages: list[discord.Message]) -> str:
     seen: dict[str, int] = {}
     for m in messages:
@@ -382,10 +619,12 @@ def _names_to_mentions(body: str, messages: list[discord.Message]) -> str:
 
     # Protect existing <@id> mentions from corruption during regex pass
     placeholders: dict[str, str] = {}
+
     def _protect(m: re.Match) -> str:
         ph = f"__UID_{m.group(1)}__"
         placeholders[ph] = m.group(0)
         return ph
+
     body = re.sub(r"<@(\d+)>", _protect, body)
 
     # Strip "@" before display names — the LLM sometimes writes @Name as plain text

@@ -1,0 +1,17 @@
+[project]
+name = "channel-to-summary"
+version = "0.1.0"
+description = "Discord bot posting a daily per-channel recap, summarized by a local LLM (llama.cpp)"
+requires-python = ">=3.14"
+dependencies = [
+    "discord.py>=2.6",
+    "llama-cpp-python>=0.3",
+    # download_model.py
+    "requests>=2.31",
+]
+
+# No [build-system]: uv treats this as an application, installing only the
+# dependencies; the code runs from the checkout with `python -m bot`.
+
+[tool.ruff.lint]
+extend-select = ["I", "B", "UP", "ASYNC"]

@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from bot import SummaryBot
-from config import DISCORD_TOKEN
+from .bot import SummaryBot
+from .config import DISCORD_TOKEN
 
 logging.basicConfig(
     level=logging.INFO,
