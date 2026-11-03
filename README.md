@@ -1,99 +1,131 @@
 # Channel To Summary
 
-Bot Discord qui génère automatiquement un résumé quotidien en français pour les salons configurés, en utilisant un LLM local via Ollama.
+Discord bot that reads all messages at the end of every day and posts a recap per channel — powered by a local LLM via llama.cpp. No API keys, no cloud dependency.
 
-## Fonctionnalités
+## Features
 
-- Résumé quotidien à une heure configurable (UTC)
-- Résumé en français via un LLM local (Ollama — aucun appel cloud)
-- Publication dans le salon d'origine ou dans un salon dédié
-- Mémoire des résumés précédents pour éviter les répétitions
-- Tag automatique des participants (`@utilisateur`)
-- Configuration entièrement via commandes slash Discord
-- Prêt pour Docker
+- **Daily scheduled summaries** — runs automatically at a configurable time (default 23:59 UTC)
+- **Per-channel opt-in** — enable/disable summaries per channel via slash commands
+- **AI-generated summaries** — uses a local Qwen2.5-1.5B GGUF model via llama.cpp for proper abstractive summaries in French
+- **Template fallback** — if no model is configured, produces structured template-based summaries (topic clusters, bug reports, announcements)
+- **Discord mentions** — all participant names are rendered as clickable `@mentions`
+- **Dedicated summary channel** — optionally route all recaps to a single channel with cross-post notifications in the original channel
+- **Fully local** — zero external API calls, no data leaves your machine
 
-## Prérequis
+## Prerequisites
 
-- [Docker](https://docs.docker.com/engine/install/) et [Docker Compose](https://docs.docker.com/compose/install/)
-- Un token de bot Discord ([portail développeur](https://discord.com/developers/applications))
-  - Activer les intents `Message Content` et `Server Members` dans la page du bot
+- Docker & Docker Compose
+- ~2 GB free RAM for the LLM model
+- A Discord bot token ([how to create one](https://discord.com/developers/applications))
 
-## Installation
+## Bot permissions
 
-### 1. Créer le fichier `.env`
+Invite the bot to your server using the OAuth2 URL generator in the Discord Developer Portal with the **bot** scope and the following permissions:
+
+| Permission | Why it's needed |
+|---|---|
+| **View Channels** | See the channels where summaries are enabled |
+| **Read Message History** | Fetch messages from the day to summarise |
+| **Send Messages** | Post summaries and cross-post notifications |
+| **Embed Links** | Post summaries as rich embeds |
+| **Use Slash Commands** | Allow `/summary` commands |
+
+**Invite URL format:**
+
+```
+https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=2147568640&scope=bot
+```
+
+Replace `YOUR_CLIENT_ID` with your bot's application ID (found in the Discord Developer Portal under **OAuth2 > General**).
+
+### Enable privileged intents
+
+In the Discord Developer Portal, go to your application → **Bot** → **Privileged Gateway Intents** and enable **Message Content Intent**. This is required for the bot to read message content and generate summaries. The `PyNaCl` / `davey` warnings about voice support are harmless and can be ignored.
+
+> The `/summary enable`, `/disable` and `/setchannel` commands additionally require the user to have the **Manage Channels** permission on the server. This is a user permission check, not a bot permission.
+
+## Quick start
 
 ```bash
 cp .env.example .env
-```
-
-Éditer `.env` :
-
-```env
-DISCORD_TOKEN=ton_token_ici
-OLLAMA_URL=http://ollama:11434
-```
-
-### 2. Lancer les services
-
-```bash
+# Edit .env and set DISCORD_TOKEN
 docker compose up -d
 ```
 
-### 3. Télécharger un modèle LLM
+The first build downloads the model (~1.1 GB). Subsequent starts are instant.
 
-```bash
-docker compose exec ollama ollama pull qwen2.5:3b
-```
+## Configuration
 
+All settings go in `.env`:
 
+| Variable | Default | Description |
+|---|---|---|
+| `DISCORD_TOKEN` | — | Your Discord bot token **(required)** |
+| `SUMMARY_TIME` | `23:59` | Daily summary time (UTC, 24h) |
+| `MESSAGE_FETCH_LIMIT` | `500` | Max messages to fetch per channel per day |
+| `DATA_DIR` | `data` | Directory for persistent data (JSON DB) |
+| `LLAMA_MODEL_PATH` | `models/qwen2.5-1.5b-instruct-q4_k_m.gguf` | Path to GGUF model. Set empty to disable LLM and use template-only mode |
 
-### 4. Inviter le bot sur un serveur
+### Without the LLM (lighter)
 
-Générer l'URL d'invitation depuis le portail développeur Discord avec les scopes `bot` et `applications.commands`, et les permissions `Send Messages`, `Read Message History`, `Manage Webhooks`.
+Set `LLAMA_MODEL_PATH=""` in `.env`. The bot will use the template-based summarizer only — no model download, ~120 MB container.
 
-### 5. Configurer les salons via Discord
+## Slash commands
 
-Une fois le bot connecté, utiliser les commandes slash dans un salon où le bot est présent :
+All commands are under `/summary`:
 
-| Commande | Description |
-|---|---|
-| `/summary add <channel> [mode] [destination]` | Ajouter un salon à résumer |
-| `/summary remove <channel>` | Retirer un salon |
-| `/summary list` | Lister les salons configurés |
-| `/summary time <HH:MM>` | Définir l'heure du résumé (UTC) |
-| `/summary now` | Déclencher un résumé immédiat |
+| Command | Permission | Description |
+|---|---|---|
+| `/summary enable` | Manage Channels | Enable daily summaries for the current channel |
+| `/summary disable` | Manage Channels | Disable summaries for the current channel |
+| `/summary status` | anyone | Check if the current channel has summaries enabled |
+| `/summary list` | anyone | Show all channels and their summary status |
+| `/summary now` | anyone | Generate a summary right now for the current channel |
+| `/summary setchannel #channel` | Manage Channels | Set a dedicated channel for recaps; a notification with a link is posted in the original channel |
 
-Exemple :
+## How the summarization works
 
-```
-/summary add channel:#général mode:"Salon dédié" destination:#résumés
-```
+### LLM mode (default)
 
-## Structure du projet
+1. Messages are time-clustered and formatted with `@mentions` and timestamps
+2. The local Qwen2.5-1.5B model (4-bit quantized, ~1.1 GB) generates an abstractive summary in French
+3. Inference runs entirely on CPU via `llama-cpp-python`, ~2 GB RAM
+
+### Template mode (fallback)
+
+When no LLM model is available:
+
+1. Messages are grouped into 25-minute topic clusters
+2. Each cluster is analysed for bugs, questions, links, reactions, and announcements
+3. A reformulated sentence is generated using templates
+4. Output is organised into structured sections with emoji prefixes (💬 📌)
+
+## Project structure
 
 ```
 Channel_To_Summary/
-├── bot/
-│   ├── __init__.py
-│   ├── __main__.py       # Point d'entrée
-│   ├── config.py         # Lecture du .env
-│   ├── main.py           # Bot Discord + commandes slash + scheduling
-│   ├── memory.py         # Persistance SQLite
-│   └── summarizer.py     # Appel à l'API Ollama
-├── data/                 # Base de données (montée en volume)
-├── .env.example
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-└── README.md
+├── main.py              # Entry point
+├── bot.py               # Discord client, slash commands, daily scheduler
+├── summarizer.py        # LLM + template-based summarization
+├── storage.py           # JSON-based persistent storage
+├── config.py            # Environment variable loading
+├── download_model.py    # GGUF model download script
+├── Dockerfile           # Docker build
+├── docker-compose.yml   # Docker Compose config
+├── requirements.txt     # Python dependencies
+├── .env.example         # Environment template
+└── README.md            # This file
 ```
 
-## Fonctionnement
+## Building from source
 
-1. Le bot se connecte à Discord et synchronise les commandes slash
-2. Le planificateur attend l'heure configurée (modifiable à la volée via `/summary time`)
-3. À l'heure dite, il récupère les messages des dernières 24h pour chaque salon configuré
-4. Il envoie les messages à Ollama avec le contexte des résumés précédents
-5. Le LLM génère un résumé en français
-6. Les noms d'utilisateurs sont convertis en mentions Discord (`<@id>`)
-7. Le résumé est posté et sauvegardé en base pour éviter les répétitions futures
+```bash
+git clone <repo>
+cd Channel_To_Summary
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 download_model.py
+cp .env.example .env   # edit DISCORD_TOKEN
+python3 main.py
+```

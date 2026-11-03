@@ -20,3 +20,6 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Downloaded at image build (download_model.py)
+models/
