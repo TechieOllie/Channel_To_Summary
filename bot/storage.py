@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import config
 
@@ -19,16 +19,14 @@ def _load() -> dict:
     _ensure_dir()
     if not os.path.exists(DATA_FILE):
         return {"guilds": {}, "summaries": []}
-    with _lock:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
+    with _lock, open(DATA_FILE) as f:
+        return json.load(f)
 
 
 def _save(data: dict):
     _ensure_dir()
-    with _lock:
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+    with _lock, open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 
 def _guild_key(guild_id: int) -> str:
@@ -40,6 +38,7 @@ def _channel_key(channel_id: int) -> str:
 
 
 # --- channel settings ---
+
 
 def is_channel_enabled(guild_id: int, channel_id: int) -> bool:
     data = _load()
@@ -62,10 +61,7 @@ def get_enabled_channels(guild_id: int) -> list[int]:
     g = data["guilds"].get(_guild_key(guild_id))
     if not g:
         return []
-    return [
-        int(cid) for cid, ch in g.get("channels", {}).items()
-        if ch.get("enabled")
-    ]
+    return [int(cid) for cid, ch in g.get("channels", {}).items() if ch.get("enabled")]
 
 
 def get_all_channel_settings(guild_id: int) -> list[dict]:
@@ -80,6 +76,7 @@ def get_all_channel_settings(guild_id: int) -> list[dict]:
 
 
 # --- summary channel ---
+
 
 def get_summary_channel(guild_id: int) -> int | None:
     data = _load()
@@ -98,6 +95,7 @@ def set_summary_channel(guild_id: int, channel_id: int):
 
 # --- summaries ---
 
+
 def save_summary(
     guild_id: int,
     channel_id: int,
@@ -106,12 +104,14 @@ def save_summary(
     message_count: int,
 ):
     data = _load()
-    data["summaries"].append({
-        "guild_id": guild_id,
-        "channel_id": channel_id,
-        "date": date_str,
-        "summary": summary,
-        "message_count": message_count,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    data["summaries"].append(
+        {
+            "guild_id": guild_id,
+            "channel_id": channel_id,
+            "date": date_str,
+            "summary": summary,
+            "message_count": message_count,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+    )
     _save(data)
