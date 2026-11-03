@@ -1,19 +1,29 @@
-FROM python:3.12-slim
+# Keep the Python version in step with flake.nix and pyproject.toml.
+FROM python:3.14-slim
 
-WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /bin/
 
-# Install build dependencies for llama-cpp-python
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake \
+# A compiler and CMake: llama-cpp-python builds llama.cpp from source.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
 
-COPY . .
+# Dependencies first, in their own layer: code changes don't reinstall them.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --no-install-project
 
-RUN python3 download_model.py
+# The model (~1.1 GB) before the code, for the same reason.
+COPY download_model.py ./
+RUN python download_model.py
+
+COPY bot/ bot/
 
 VOLUME ["/app/data"]
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "bot"]

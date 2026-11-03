@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 import discord
 from discord import app_commands
 
-import config
-import storage
-from summarizer import fetch_messages_for_day, generate_summary
+from . import config
+from . import storage
+from .summarizer import fetch_messages_for_day, generate_summary
 
 logger = logging.getLogger(__name__)
 

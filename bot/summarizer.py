@@ -10,7 +10,7 @@ from typing import NamedTuple
 
 import discord
 
-import config
+from . import config
 
 logger = logging.getLogger(__name__)
 

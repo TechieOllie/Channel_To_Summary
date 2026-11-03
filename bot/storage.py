@@ -5,7 +5,7 @@ import os
 import threading
 from datetime import datetime, timezone
 
-import config
+from . import config
 
 DATA_FILE = os.path.join(config.DATA_DIR, "data.json")
 _lock = threading.Lock()

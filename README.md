@@ -104,28 +104,40 @@ When no LLM model is available:
 
 ```
 Channel_To_Summary/
-├── main.py              # Entry point
-├── bot.py               # Discord client, slash commands, daily scheduler
-├── summarizer.py        # LLM + template-based summarization
-├── storage.py           # JSON-based persistent storage
-├── config.py            # Environment variable loading
-├── download_model.py    # GGUF model download script
-├── Dockerfile           # Docker build
-├── docker-compose.yml   # Docker Compose config
-├── requirements.txt     # Python dependencies
-├── .env.example         # Environment template
-└── README.md            # This file
+├── bot/
+│   ├── __main__.py      # Entry point (python -m bot)
+│   ├── bot.py           # Discord client, slash commands, daily scheduler
+│   ├── summarizer.py    # LLM + template-based summarization
+│   ├── storage.py       # JSON-based persistent storage
+│   └── config.py        # Environment variable loading
+├── download_model.py    # GGUF model download script (into models/)
+├── pyproject.toml       # Dependencies (locked by uv.lock)
+├── flake.nix            # Nix dev shell
+├── Dockerfile
+├── docker-compose.yaml
+└── .env.example         # Environment template
 ```
 
-## Building from source
+## Development
+
+`direnv allow` gives a dev shell (Python, uv, ruff, CMake from `flake.nix`)
+with `.venv` synced from `uv.lock` and `.env` loaded. The first sync builds
+llama.cpp from source, which takes a few minutes.
 
 ```bash
-git clone <repo>
-cd Channel_To_Summary
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3 download_model.py
-cp .env.example .env   # edit DISCORD_TOKEN
-python3 main.py
+cp .env.example .env     # set DISCORD_TOKEN
+python download_model.py # once, ~1.1 GB into models/
+python -m bot            # or F5 in VS Code
 ```
+
+| | |
+| --- | --- |
+| Add a dependency | `uv add <package>` |
+| Lint / format | `ruff check --fix && ruff format` |
+| Run the container | `docker compose up --build` |
+
+## Deploying
+
+Every push to `main` publishes `ghcr.io/techieollie/channel_to_summary:latest`
+(model included); the server's stack (DockerComposeFiles `channel-to-summary`)
+pulls it: `docker compose pull && docker compose up -d`.

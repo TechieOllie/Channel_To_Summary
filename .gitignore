@@ -1,25 +1,9 @@
-# Python
+/.venv/
+/.direnv/
+/.ruff_cache/
 __pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-
-# Environment
-.env
-
-# Persistent data
-data/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Downloaded at image build (download_model.py)
-models/
+# Secrets; .env.example is the committed one.
+/.env
+/data/
+# Downloaded by download_model.py (at image build, or once by hand locally).
+/models/

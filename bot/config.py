@@ -2,9 +2,7 @@ from datetime import timezone
 import os
 from zoneinfo import ZoneInfo
 
-from dotenv import load_dotenv
 
-load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 SUMMARY_TIME = os.getenv("SUMMARY_TIME", "23:59")
